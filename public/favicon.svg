@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>DayMark</title>
+  <rect width="512" height="512" rx="108" fill="#19473d"/>
+  <rect x="106" y="94" width="300" height="324" rx="40" fill="#f7f7f2"/>
+  <path d="M106 160c0-22.1 17.9-40 40-40h220c22.1 0 40 17.9 40 40v46H106z" fill="#6d9086"/>
+  <path d="M184 92v67M328 92v67" stroke="#f7f7f2" stroke-width="24" stroke-linecap="round"/>
+  <path d="m174 286 50 50 114-121" fill="none" stroke="#e9a850" stroke-width="31" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="350" cy="355" r="14" fill="#19473d"/>
+</svg>
