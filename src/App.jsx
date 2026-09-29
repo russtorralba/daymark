@@ -23,8 +23,28 @@ export default function App() {
   const [sort, setSort] = useState('soonest')
   const [modal, setModal] = useState(null)
   const [form, setForm] = useState(blankTask)
+  const [installPrompt, setInstallPrompt] = useState(null)
+  const [isStandalone, setIsStandalone] = useState(() => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true)
+  const [isIosSafari] = useState(() => {
+    const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1)
+    return isIos && /^((?!chrome|android|crios|fxios|edgios).)*safari/i.test(window.navigator.userAgent)
+  })
+  const [showIosInstallHelp, setShowIosInstallHelp] = useState(false)
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)) }, [tasks])
+  useEffect(() => {
+    const onBeforeInstallPrompt = event => { event.preventDefault(); setInstallPrompt(event) }
+    const onAppInstalled = () => { setInstallPrompt(null); setIsStandalone(true); setShowIosInstallHelp(false) }
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+    window.addEventListener('appinstalled', onAppInstalled)
+    return () => { window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt); window.removeEventListener('appinstalled', onAppInstalled) }
+  }, [])
+  useEffect(() => {
+    if (!showIosInstallHelp) return undefined
+    const onKeyDown = event => { if (event.key === 'Escape') setShowIosInstallHelp(false) }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [showIosInstallHelp])
   const today = day(0)
   const counts = useMemo(() => ({
     today: tasks.filter(t => t.status !== 'Completed' && t.dueDate === today).length,
@@ -41,9 +61,17 @@ export default function App() {
   const save = event => { event.preventDefault(); if (!form.title.trim()) return; if (modal === 'new') setTasks(list => [...list, { ...form, title: form.title.trim(), id: crypto.randomUUID() }]); else setTasks(list => list.map(t => t.id === form.id ? { ...form, title: form.title.trim() } : t)); setModal(null) }
   const remove = id => { if (window.confirm('Delete this task?')) setTasks(list => list.filter(t => t.id !== id)) }
   const cycleStatus = task => setTasks(list => list.map(t => t.id === task.id ? { ...t, status: statuses[(statuses.indexOf(t.status) + 1) % statuses.length] } : t))
+  const requestInstall = async () => {
+    if (installPrompt) {
+      await installPrompt.prompt()
+      await installPrompt.userChoice
+      setInstallPrompt(null)
+    } else if (isIosSafari) setShowIosInstallHelp(true)
+  }
+  const showInstallButton = !isStandalone && Boolean(installPrompt || isIosSafari)
 
   return <main>
-    <section className="hero"><div className="brand"><span className="logo">◷</span><span>DayMark</span></div><div className="hero-content"><p className="eyebrow">YOUR DEADLINES, AT A GLANCE</p><h1>Make every day<br />count.</h1><p className="subtitle">A quieter way to stay on top of what matters.</p></div><button className="add-btn" onClick={openNew}><span>+</span> Add task</button></section>
+    <section className="hero"><div className="brand"><span className="logo">◷</span><span>DayMark</span></div><div className="hero-content"><p className="eyebrow">YOUR DEADLINES, AT A GLANCE</p><h1>Make every day<br />count.</h1><p className="subtitle">A quieter way to stay on top of what matters.</p></div><div className="hero-actions"><button className="add-btn" onClick={openNew}><span>+</span> Add task</button>{showInstallButton && <button className="install-btn" type="button" onClick={requestInstall}>↓ Install DayMark</button>}</div></section>
     <section className="workspace">
       <div className="overview"><div><p className="section-kicker">OVERVIEW</p><h2>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}.</h2><p className="muted">Here’s the shape of your workload.</p></div><p className="date-stamp">{new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}</p></div>
       <div className="stats"><Stat value={counts.today} label="Due today" tone="today" /><Stat value={counts.upcoming} label="Upcoming" tone="upcoming" /><Stat value={counts.overdue} label="Overdue" tone="overdue" /><Stat value={counts.completed} label="Completed" tone="completed" /></div>
@@ -52,6 +80,7 @@ export default function App() {
       <div className="task-list">{visibleTasks.length ? visibleTasks.map(task => <TaskRow key={task.id} task={task} onEdit={() => openEdit(task)} onDelete={() => remove(task.id)} onCycle={() => cycleStatus(task)} />) : <div className="empty"><strong>No tasks found.</strong><span>Try changing your filters or add a new task.</span></div>}</div>
     </section>
     {modal && <div className="modal-backdrop" onMouseDown={() => setModal(null)}><form className="modal" onSubmit={save} onMouseDown={e => e.stopPropagation()}><div className="modal-header"><div><p className="section-kicker">{modal === 'new' ? 'NEW TASK' : 'EDIT TASK'}</p><h2>{modal === 'new' ? 'Add a deadline' : 'Update task'}</h2></div><button type="button" className="icon-button" onClick={() => setModal(null)}>×</button></div><label>Task title<input required autoFocus value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="What needs to get done?" /></label><label>Project name <span className="optional">optional</span><input value={form.project} onChange={e => setForm({ ...form, project: e.target.value })} placeholder="e.g. Spring campaign" /></label><div className="form-grid"><label>Due date<input type="date" required value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label><label>Priority<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}>{priorities.map(x => <option key={x}>{x}</option>)}</select></label></div><label>Status<select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{statuses.map(x => <option key={x}>{x}</option>)}</select></label><div className="modal-actions"><button type="button" className="cancel" onClick={() => setModal(null)}>Cancel</button><button className="save" type="submit">{modal === 'new' ? 'Add task' : 'Save changes'}</button></div></form></div>}
+    {showIosInstallHelp && <div className="install-backdrop" onMouseDown={() => setShowIosInstallHelp(false)}><section className="install-panel" role="dialog" aria-modal="true" aria-labelledby="ios-install-title" onMouseDown={event => event.stopPropagation()}><div className="modal-header"><div><p className="section-kicker">INSTALL DAYMARK</p><h2 id="ios-install-title">Add DayMark to your Home Screen</h2></div><button className="icon-button" type="button" onClick={() => setShowIosInstallHelp(false)} aria-label="Close install instructions" autoFocus>×</button></div><p>To install DayMark:</p><p><strong>Tap the Share button, then choose Add to Home Screen.</strong></p><div className="modal-actions"><button className="cancel" type="button" onClick={() => setShowIosInstallHelp(false)}>Close</button></div></section></div>}
   </main>
 }
 
